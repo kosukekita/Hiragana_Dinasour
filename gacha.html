@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<!-- saved from url=(0067)https://yurucrasounds-suzuki3.github.io/hiraganadinasor2/gacha.html -->
+<html lang="ja"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ガチャ</title>
+
+<style>
+  body {
+    font-family: 'Noto Sans JP', sans-serif;
+    background: #fbf4dd;
+    text-align: center;
+    padding: 20px;
+  }
+
+  h1 {
+    font-size: 32px;
+    margin-bottom: 10px;
+  }
+
+  #egg {
+    width: 200px;
+    transition: transform 0.3s ease;
+  }
+
+  .shake {
+    animation: shake 0.4s infinite;
+  }
+
+  @keyframes shake {
+    0% { transform: translate(0,0) rotate(0); }
+    25% { transform: translate(3px,-2px) rotate(1deg); }
+    50% { transform: translate(-3px,2px) rotate(-1deg); }
+    75% { transform: translate(2px,-3px) rotate(1deg); }
+    100% { transform: translate(0,0) rotate(0); }
+  }
+
+  #resultImg {
+    width: 260px;
+    display: none;
+    margin: 20px auto;
+  }
+
+  #resultText {
+    font-size: 24px;
+    margin-top: 10px;
+    font-weight: bold;
+    color: #4b7b3a;
+    display: none;
+  }
+
+  #gachaBtn {
+    margin-top: 20px;
+    padding: 14px 28px;
+    font-size: 22px;
+    background: #7cc76c;
+    border-radius: 12px;
+    color: white;
+    border: none;
+  }
+
+  #backBtn {
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    background: #4c8f3a;
+    color: white;
+    padding: 10px 18px;
+    border-radius: 20px;
+    text-decoration: none;
+  }
+</style>
+</head>
+
+<body>
+
+<a id="backBtn" href="home.html">← もどる</a>
+
+<h1>🥚ガチャ</h1>
+
+<div id="gachaArea">
+    <h2>ガチャはまだ回せません🥲</h2>
+    <p style="font-size:22px; color:#555;">あと <b>10</b> 回 なぞり練習が必要です</p>
+    <a href="hiragana.html" style="display:inline-block;margin-top:30px;background:#4c8f3a;color:white;padding:15px 25px;border-radius:10px;text-decoration:none;">
+       れんしゅうページへ
+    </a>
+  </div>
+
+<script>
+/* ---------- カード一覧（33種類） ---------- */
+const cards = [
+  /* 恐竜 */
+  { id: "tira", name: "ティラノサウルス", rare: 5, img: "./zukan_files/tira.png" },
+  { id: "tori", name: "トリケラトプス", rare: 4, img: "./zukan_files/tori.png" },
+  { id: "ste", name: "ステゴサウルス", rare: 3, img: "./zukan_files/ste.png" },
+  { id: "bra", name: "ブラキオサウルス", rare: 3, img: "./zukan_files/bra.png" },
+  { id: "pte", name: "プテラノドン", rare: 2, img: "./zukan_files/pte.png" },
+  { id: "spi", name: "スピノサウルス", rare: 5, img: "./zukan_files/spi.png" },
+  { id: "an",  name: "アンキロサウルス", rare: 2, img: "./zukan_files/an.png" },
+  { id: "para", name: "パラサウロロフス", rare: 4, img: "./zukan_files/para.png" },
+  { id: "igu",  name: "イグアノドン", rare: 2, img: "./zukan_files/igu.png" },
+  { id: "vero", name: "ヴェロキラプトル", rare: 4, img: "./zukan_files/vero.png" },
+
+  /* 海の生き物 */
+  { id: "tako", name: "タコ", rare: 2, img: "./zukan_files/tako.png" },
+  { id: "same", name: "サメ", rare: 4, img: "./zukan_files/same.png" },
+  { id: "iruka", name: "イルカ", rare: 3, img: "./zukan_files/iruka.png" },
+  { id: "kumanomi", name: "カクレクマノミ", rare: 2, img: "./zukan_files/kumanomi.png" },
+  { id: "kurage", name: "クラゲ", rare: 1, img: "./zukan_files/kurage.png" },
+  { id: "manta", name: "マンタ", rare: 3, img: "./zukan_files/manta.png" },
+  { id: "hitode", name: "ヒトデ", rare: 1, img: "./zukan_files/hitode.png" },
+  { id: "secret", name: "シークレット", rare: 5, img: "./zukan_files/secret.png" },
+  { id: "ika", name: "イカ", rare: 2, img: "./zukan_files/ika.png" },
+  { id: "rakko", name: "ラッコ", rare: 3, img: "./zukan_files/rakko.png" },
+  { id: "kame", name: "カメ", rare: 3, img: "./zukan_files/kame.png" },
+
+  /* 昆虫 */
+  { id: "tyo", name: "蝶々", rare: 1, img: "./zukan_files/tyo.png" },
+  { id: "kabu", name: "カブトムシ", rare: 4, img: "./zukan_files/kabu.png" },
+  { id: "ton", name: "トンボ", rare: 2, img: "./zukan_files/ton.png" },
+  { id: "tento", name: "てんとう虫", rare: 1, img: "./zukan_files/tento.png" },
+  { id: "kama", name: "カマキリ", rare: 3, img: "./zukan_files/kama.png" },
+  { id: "kuwa", name: "クワガタ", rare: 4, img: "./zukan_files/kuwa.png" },
+  { id: "hachi", name: "ハチ", rare: 2, img: "./zukan_files/hachi.png" },
+  { id: "kata", name: "カタツムリ", rare: 1, img: "./zukan_files/kata.png" },
+  { id: "imo", name: "芋虫", rare: 1, img: "./zukan_files/imo.png" },
+  { id: "semi", name: "セミ", rare: 2, img: "./zukan_files/semi.png" },
+  { id: "bata", name: "バッタ", rare: 2, img: "./zukan_files/bata.png" }
+];
+
+/* ---------- 図鑑に登録 ---------- */
+function addToZukan(card) {
+  let zukan = JSON.parse(localStorage.getItem("zukan") || "{}");
+
+  if (zukan[card.id]) {
+    zukan[card.id].count++;
+  } else {
+    zukan[card.id] = {
+      name: card.name,
+      img: card.img,
+      rare: card.rare,
+      count: 1
+    };
+  }
+
+  localStorage.setItem("zukan", JSON.stringify(zukan));
+}
+
+/* ---------- レア度 → 重み ---------- */
+function getWeight(rare) {
+  switch (rare) {
+    case 1: return 5;
+    case 2: return 3;
+    case 3: return 2;
+    case 4: return 1;
+    case 5: return 0.5;
+  }
+}
+
+/* ---------- ガチャ抽選 ---------- */
+function rollGacha() {
+
+  /* --- secret 1% --- */
+  if (Math.random() < 0.01) {
+    return cards.find(c => c.id === "secret");
+  }
+
+  /* --- 残り99％ → 重み付き抽選 --- */
+  let pool = [];
+
+  cards.forEach(card => {
+    if (card.id === "secret") return; // secretは除外
+
+    const weight = getWeight(card.rare);
+    for (let i = 0; i < weight * 10; i++) {
+      pool.push(card);
+    }
+  });
+
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+/* ---------- 練習回数チェック ---------- */
+let count = Number(localStorage.getItem("practiceCount") || 0);
+
+if (count < 10) {
+  document.getElementById("gachaArea").innerHTML = `
+    <h2>ガチャはまだ回せません🥲</h2>
+    <p style="font-size:22px; color:#555;">あと <b>${10 - count}</b> 回 なぞり練習が必要です</p>
+    <a href="hiragana.html"
+       style="display:inline-block;margin-top:30px;background:#4c8f3a;color:white;padding:15px 25px;border-radius:10px;text-decoration:none;">
+       れんしゅうページへ
+    </a>
+  `;
+} else {
+  // 10回以上の場合、ガチャボタンを表示
+  document.getElementById("gachaArea").innerHTML = `
+    <img id="egg" src="./gacha_files/0egg.png" style="width:200px;margin:20px 0;">
+    <br>
+    <button id="gachaBtn" onclick="startGacha()">ガチャを回す！</button>
+    <br>
+    <img id="resultImg">
+    <div id="resultText"></div>
+  `;
+}
+
+/* ---------- ガチャ開始 ---------- */
+function startGacha() {
+
+  let count = Number(localStorage.getItem("practiceCount") || 0);
+  if (count < 10) {
+    alert("練習が足りません！");
+    return;
+  }
+
+  localStorage.setItem("practiceCount", count - 10);
+
+  const egg = document.getElementById("egg");
+  egg.classList.add("shake");
+
+  /* 卵演出 */
+  setTimeout(() => {
+    egg.style.transform = "scale(1.1)";
+  }, 600);
+
+  setTimeout(() => {
+    egg.style.display = "none";
+
+    /* --- 高機能抽選 --- */
+    const result = rollGacha();
+
+    /* 結果反映 */
+    const resultImg = document.getElementById("resultImg");
+    const resultText = document.getElementById("resultText");
+
+    resultImg.src = result.img;
+    resultImg.style.display = "block";
+
+    resultText.textContent = `${result.name}（★${result.rare}）が出た！`;
+    resultText.style.display = "block";
+
+    addToZukan(result);
+
+  }, 1200);
+}
+</script>
+
+
+
+</body></html>

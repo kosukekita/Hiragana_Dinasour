@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>れんしゅう</title>
+
+<style>
+  body {
+    text-align: center;
+    font-family: "UDDigiKyokasho", "Noto Sans JP", sans-serif;
+    background: #fff6e0;
+    margin: 0;
+    padding: 20px;
+    overflow: hidden;
+  }
+
+  @font-face {
+    font-family: "UDDigiKyokasho";
+    src: url("https://fonts.gstatic.com/ea/uddigikyokasho/v1/UDDigiKyokashoN-R.woff2") format("woff2");
+  }
+
+  #backBtn {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    background: #4c8f3a;
+    color: white;
+    padding: 10px 15px;
+    border-radius: 20px;
+    text-decoration: none;
+    z-index: 10;
+    touch-action: auto;
+  }
+
+  #progress {
+    font-size: 22px;
+    color: #4c8f3a;
+    margin-top: 10px;
+    font-weight: bold;
+  }
+
+  #canvas-container {
+    position: relative;
+    width: 300px;
+    height: 300px;
+    margin: 0 auto;
+  }
+
+  #templateImg {
+    position: absolute;
+    width: 300px;
+    height: 300px;
+    object-fit: contain;
+    opacity: 0.25;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  #canvas {
+    width: 300px;
+    height: 300px;
+    border: 4px solid #4c8f3a;
+    background: white;
+    border-radius: 20px;
+    touch-action: none !important;
+  }
+
+  .btn {
+    margin-top: 20px;
+    padding: 15px 25px;
+    background: #4c8f3a;
+    color: white;
+    border-radius: 10px;
+    border: none;
+    font-size: 22px;
+    touch-action: auto !important;
+    margin-left: 10px;
+    margin-right: 10px;
+  }
+
+  #popup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.6);
+    background: white;
+    padding: 25px 35px;
+    border-radius: 20px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    font-size: 24px;
+    color: #4c8f3a;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s, transform 0.3s;
+    z-index: 50;
+  }
+
+  #popup.show {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  #strokeInfo {
+    font-size: 18px;
+    color: #4c8f3a;
+    margin-top: 10px;
+    min-height: 25px;
+  }
+</style>
+</head>
+
+<body>
+
+<a id="backBtn" href="hiragana.html">← もどる</a>
+
+<h2 id="title" style="color:#4c8f3a;">あ をなぞろう！</h2>
+<div style="text-align:center; font-size:16px; color:#4c8f3a; margin-bottom:5px;">
+  <span id="difficultyDisplay"></span>
+</div>
+<div id="progress">ガチャまで：あと 10 回</div>
+<div id="strokeInfo"></div>
+
+<div id="canvas-container">
+  <img id="templateImg" src="./practice_files/あ.png">
+  <canvas id="canvas" width="300" height="300"></canvas>
+</div>
+
+<button class="btn" onclick="clearCanvas()">やりなおす</button>
+<button class="btn" onclick="finishPractice()">できた！</button>
+
+<div id="popup"></div>
+
+<audio id="okSound" src="https://www.soundjay.com/buttons/sounds/button-09.mp3"></audio>
+
+<script src="strokeMaskData.js"></script>
+<script>
+/* ---------------------------
+    初期設定
+---------------------------- */
+const selected = localStorage.getItem("selectedChar") || "あ";
+const templateImg = document.getElementById("templateImg");
+const canvasContainer = document.getElementById("canvas-container");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const DISPLAY_SIZE = 300; // 表示サイズを300pxに固定
+
+let strokeMap = new Uint8Array();
+let strokePixels = [];
+let totalStrokeCount = 1;
+let strokeMapReady = false;
+let maskWidth = 0;
+let maskHeight = 0;
+let scaleX = 1;
+let scaleY = 1;
+let offsetX = 0;
+let offsetY = 0;
+let currentStrokeIndex = 0;
+let userStrokes = [];
+let isDrawing = false;
+let currentStroke = null;
+let lastX = null;
+let lastY = null;
+let drawDistance = 0;
+
+function updateStrokeInfo() {
+  const info = document.getElementById("strokeInfo");
+  if (strokeMapReady) {
+    info.textContent = `${Math.min(currentStrokeIndex + 1, totalStrokeCount)} / ${totalStrokeCount} 画目`;
+  } else {
+    info.textContent = "マスクの読み込みに失敗しました";
+  }
+}
+
+// 難易度表示
+const difficulty = localStorage.getItem('difficulty') || 'normal';
+const difficultyNames = {
+  'easy': '😊 かんたん',
+  'normal': '🙂 ふつう',
+  'hard': '😤 むずかしい'
+};
+document.getElementById('difficultyDisplay').textContent = `なんいど: ${difficultyNames[difficulty]}`;
+
+// 進捗表示更新
+function updateProgress() {
+  let count = Number(localStorage.getItem("practiceCount") || 0);
+  const remaining = Math.max(0, 10 - count);
+  document.getElementById("progress").textContent = `ガチャまで：あと ${remaining} 回`;
+}
+updateProgress();
+
+function decodeBase64Map(base64) {
+  const binary = atob(base64);
+  const len = binary.length;
+  const arr = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    arr[i] = binary.charCodeAt(i);
+  }
+  return arr;
+}
+
+function applyMaskData(char) {
+  const data = window.strokeMaskData?.[char];
+  if (!data) {
+    strokeMapReady = false;
+    totalStrokeCount = 1;
+    strokeMap = new Uint8Array();
+    strokePixels = [];
+    internalClearCanvas();
+    return;
+  }
+
+  const { width, height, strokeCount, map, strokePixels: pxCounts } = data;
+  maskWidth = width;
+  maskHeight = height;
+  
+  // キャンバスサイズを300pxに固定
+  canvas.width = DISPLAY_SIZE;
+  canvas.height = DISPLAY_SIZE;
+  
+  // object-fit: contain を考慮したスケールとオフセットの計算
+  const imageAspect = width / height;
+  const containerAspect = DISPLAY_SIZE / DISPLAY_SIZE;
+  
+  let displayWidth, displayHeight;
+  if (imageAspect > containerAspect) {
+    // 幅基準で縮小
+    displayWidth = DISPLAY_SIZE;
+    displayHeight = DISPLAY_SIZE / imageAspect;
+    offsetX = 0;
+    offsetY = (DISPLAY_SIZE - displayHeight) / 2;
+  } else {
+    // 高さ基準で縮小
+    displayHeight = DISPLAY_SIZE;
+    displayWidth = DISPLAY_SIZE * imageAspect;
+    offsetX = (DISPLAY_SIZE - displayWidth) / 2;
+    offsetY = 0;
+  }
+  
+  // スケール変換の計算（表示サイズ → マスクサイズ）
+  scaleX = width / displayWidth;
+  scaleY = height / displayHeight;
+
+  strokeMap = decodeBase64Map(map);
+  strokePixels = pxCounts.slice();
+  totalStrokeCount = strokeCount || strokePixels.length || 1;
+  strokeMapReady = true;
+  internalClearCanvas();
+}
+
+function loadCharacter(char) {
+  document.getElementById("title").textContent = `${char} をなぞろう！`;
+  applyMaskData(char);
+  templateImg.src = `./practice_files/${char}.png`;
+}
+
+loadCharacter(selected);
+
+/* ---------------------------
+    描画系
+---------------------------- */
+
+canvas.addEventListener("pointerdown", e => {
+  if (currentStrokeIndex >= totalStrokeCount) {
+    return;
+  }
+  
+  isDrawing = true;
+  const rect = canvas.getBoundingClientRect();
+  lastX = e.clientX - rect.left;
+  lastY = e.clientY - rect.top;
+  
+  // 新しいストロークを開始
+  currentStroke = {
+    startX: lastX,
+    startY: lastY,
+    points: [{ x: lastX, y: lastY }]
+  };
+  
+  ctx.beginPath();
+  ctx.moveTo(lastX, lastY);
+});
+
+canvas.addEventListener("pointerup", () => {
+  if (!isDrawing) return;
+  
+  isDrawing = false;
+  
+  if (currentStroke && currentStroke.points.length > 0) {
+    // ストロークの終了位置を記録
+    const lastPoint = currentStroke.points[currentStroke.points.length - 1];
+    currentStroke.endX = lastPoint.x;
+    currentStroke.endY = lastPoint.y;
+    
+    // 書き順判定
+    const isValid = validateStroke(currentStroke, currentStrokeIndex);
+    
+    if (isValid) {
+      userStrokes.push(currentStroke);
+      currentStrokeIndex++;
+      updateStrokeInfo();
+      
+      if (currentStrokeIndex >= totalStrokeCount) {
+        // すべてのストロークが完了したら自動的にカウント処理
+        handlePracticeComplete();
+      } else {
+        showPopup(`正しい書き順です！次は ${currentStrokeIndex + 1} 画目です`);
+      }
+    } else {
+      showPopup("書き順が違います。もう一度試してください。");
+      // 間違ったストロークを消去
+      clearCanvas();
+      // 正しく書かれたストロークを再描画
+      redrawValidStrokes();
+    }
+    
+    currentStroke = null;
+  }
+  
+  ctx.beginPath();
+});
+
+canvas.addEventListener("pointermove", e => {
+  if (!isDrawing) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  const dx = x - lastX;
+  const dy = y - lastY;
+  drawDistance += Math.sqrt(dx*dx + dy*dy);
+
+  if (currentStroke) {
+    currentStroke.points.push({ x, y });
+  }
+
+  ctx.lineWidth = 12;
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "#4c8f3a";
+
+  ctx.lineTo(x, y);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+
+  lastX = x;
+  lastY = y;
+});
+
+/* ---------------------------
+   書き順判定
+---------------------------- */
+function validateStroke(stroke, strokeIndex) {
+  if (!strokeMapReady) {
+    return stroke.points.length > 0;
+  }
+
+  const expectedStroke = strokeIndex + 1;
+  let matches = 0;
+
+  stroke.points.forEach(({ x, y }) => {
+    // 表示座標をマスク座標に変換（オフセットを考慮）
+    const adjustedX = x - offsetX;
+    const adjustedY = y - offsetY;
+    const px = Math.round(adjustedX * scaleX);
+    const py = Math.round(adjustedY * scaleY);
+    if (px < 0 || px >= maskWidth || py < 0 || py >= maskHeight) {
+      return;
+    }
+    const idx = strokeMap[py * maskWidth + px];
+    if (idx === expectedStroke) {
+      matches++;
+    }
+  });
+
+  const total = Math.max(1, stroke.points.length);
+  const ratio = matches / total;
+  const strokePixelTotal = strokePixels[strokeIndex] || 1;
+  const coverage = matches / strokePixelTotal;
+
+  // 難易度に応じた判定基準
+  const difficulty = localStorage.getItem('difficulty') || 'normal';
+  let ratioThreshold, coverageThreshold;
+  
+  switch(difficulty) {
+    case 'easy':
+      ratioThreshold = 0.15;    // 15%のポイントが正しい領域に重なればOK
+      coverageThreshold = 0.03;  // 3%のストロークをカバーすればOK
+      break;
+    case 'hard':
+      ratioThreshold = 0.35;    // 35%のポイントが正しい領域に重なる必要がある
+      coverageThreshold = 0.08;  // 8%のストロークをカバーする必要がある
+      break;
+    case 'normal':
+    default:
+      ratioThreshold = 0.25;    // 25%のポイントが正しい領域に重なればOK
+      coverageThreshold = 0.05;  // 5%のストロークをカバーすればOK
+  }
+
+  // デバッグ情報を表示
+  console.log('=== 書き順判定デバッグ ===');
+  console.log(`文字: ${selected}, ストローク: ${strokeIndex + 1}画目`);
+  console.log(`マスクサイズ: ${maskWidth}x${maskHeight}px`);
+  console.log(`スケール: X=${scaleX.toFixed(3)}, Y=${scaleY.toFixed(3)}`);
+  console.log(`オフセット: X=${offsetX.toFixed(1)}px, Y=${offsetY.toFixed(1)}px`);
+  console.log(`描画ポイント数: ${total}個`);
+  console.log(`正しい領域に重なったポイント: ${matches}個`);
+  console.log(`重なり率: ${(ratio * 100).toFixed(1)}% (必要: ${(ratioThreshold * 100).toFixed(1)}%)`);
+  console.log(`カバー率: ${(coverage * 100).toFixed(1)}% (必要: ${(coverageThreshold * 100).toFixed(1)}%)`);
+  console.log(`ストローク総ピクセル数: ${strokePixelTotal}px`);
+  console.log(`難易度: ${difficulty}`);
+  
+  // サンプルポイントの変換例を表示
+  if (stroke.points.length > 0) {
+    const first = stroke.points[0];
+    const last = stroke.points[stroke.points.length - 1];
+    console.log(`開始点: 表示(${first.x.toFixed(0)}, ${first.y.toFixed(0)}) → マスク(${Math.round((first.x - offsetX) * scaleX)}, ${Math.round((first.y - offsetY) * scaleY)})`);
+    console.log(`終了点: 表示(${last.x.toFixed(0)}, ${last.y.toFixed(0)}) → マスク(${Math.round((last.x - offsetX) * scaleX)}, ${Math.round((last.y - offsetY) * scaleY)})`);
+  }
+  
+  console.log(`判定結果: ${ratio >= ratioThreshold || coverage >= coverageThreshold ? '✅ 合格' : '❌ 不合格'}`);
+  console.log('===================');
+
+  return ratio >= ratioThreshold || coverage >= coverageThreshold;
+}
+
+/* ---------------------------
+   正しく書かれたストロークを再描画
+---------------------------- */
+function redrawValidStrokes() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  ctx.lineWidth = 12;
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "#4c8f3a";
+  
+  userStrokes.forEach(stroke => {
+    if (stroke.points.length > 0) {
+      ctx.beginPath();
+      ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+      
+      for (let i = 1; i < stroke.points.length; i++) {
+        ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+      }
+      
+      ctx.stroke();
+    }
+  });
+}
+
+/* ---------------------------
+   キャンバス消去
+---------------------------- */
+function internalClearCanvas() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawDistance = 0;
+  currentStrokeIndex = 0;
+  userStrokes = [];
+  currentStroke = null;
+  updateStrokeInfo();
+}
+
+function clearCanvas() {
+  internalClearCanvas();
+}
+
+/* ---------------------------
+   ポップ演出
+---------------------------- */
+function showPopup(text) {
+  const popup = document.getElementById("popup");
+  popup.textContent = text;
+  popup.classList.add("show");
+  setTimeout(() => popup.classList.remove("show"), 2000);
+}
+
+/* ---------------------------
+   全ストローク完了時の処理
+---------------------------- */
+function handlePracticeComplete() {
+  // 効果音を再生
+  document.getElementById("okSound").play().catch(() => {});
+  
+  // 練習カウントを増やす
+  let count = Number(localStorage.getItem("practiceCount") || 0);
+  count++;
+  localStorage.setItem("practiceCount", count);
+  
+  updateProgress();
+  
+  // 10回未達成の場合
+  if (count < 10) {
+    showPopup(`すごい！🦖 ガチャまで あと ${10 - count} 回！`);
+    setTimeout(() => {
+      clearCanvas();
+    }, 2000);
+    return;
+  }
+  
+  // 10回達成
+  localStorage.setItem("practiceCount", 10);
+  showPopup("10回達成！ガチャだ！！🎉🦖");
+  
+  setTimeout(() => {
+    location.href = "gacha.html";
+  }, 2000);
+}
+
+/* ---------------------------
+   できた！処理（手動確認用）
+---------------------------- */
+function finishPractice() {
+  if (currentStrokeIndex < totalStrokeCount) {
+    showPopup(`あと ${totalStrokeCount - currentStrokeIndex} 画書いてください`);
+    return;
+  }
+  
+  // 書いたかどうか判定（距離が一定以下ならNG）
+  if (drawDistance < 150) {
+    showPopup("まずは書いてみよう！✏️");
+    return;
+  }
+  
+  // すでに全ストローク完了している場合は、再度カウント処理
+  handlePracticeComplete();
+}
+</script>
+
+</body>
+</html>
+
